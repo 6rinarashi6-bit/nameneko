@@ -214,6 +214,15 @@ body{ font-family: var(--font-app, 'Segoe UI','Microsoft YaHei',sans-serif); }
   background: color-mix(in srgb, var(--accent) 14%, #fff);
   border-left-color: var(--accent);
 }
+/* 生成器头右侧按钮组：自适应不挤布局 */
+.head-actions{
+  margin-left:auto;
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;          /* 小屏可换行 */
+  align-items:center;
+}
+.head-actions .btn.small{ white-space:nowrap; } /* 按钮文字不换行 */
 </style>
 </head>
 <body>
@@ -255,13 +264,19 @@ body{ font-family: var(--font-app, 'Segoe UI','Microsoft YaHei',sans-serif); }
 <!-- 生成器屏幕 -->
 <div id="generator-screen" class="screen">
   <div class="generator" id="generatorRoot">
-    <div class="generator-header">
-      <button class="btn secondary" onclick="showScreen('main-screen')">⬅️ 返回</button>
-      <div style="margin-left:auto;display:flex;gap:8px;">
-        <button class="btn secondary small" onclick="saveToLibrary(false)">💾 保存到库</button>
-        <button class="btn small" onclick="saveToLibrary(true)">⭐ 保存到收藏夹</button>
-      </div>
-    </div>
+<div class="generator-header">
+  <button class="btn secondary" onclick="showScreen('main-screen')">⬅️ 返回</button>
+
+  <!-- 右侧动作区：注意这个 div 一定要包含所有按钮 -->
+  <div class="head-actions">
+    <button class="btn secondary small" onclick="saveToLibrary(false)">💾 保存到库</button>
+    <button class="btn small" onclick="saveToLibrary(true)">⭐ 保存到收藏夹</button>
+    <button class="btn secondary small" onclick="saveGeneratorDefaults()">📌 设为默认称呼</button>
+    <button class="btn secondary small" onclick="clearGeneratorDefaults()">🗑️ 清空默认</button> 
+  </div>
+</div>
+
+
 
     <div class="field">
       <label>🧾 文本标题（可选）</label>
@@ -319,7 +334,7 @@ body{ font-family: var(--font-app, 'Segoe UI','Microsoft YaHei',sans-serif); }
     </div>
 
     <div class="actions">
-      <button class="btn" onclick="replaceFields()">✨ 生成代入文本</button>
+      <button class="btn" onclick="replaceFields()">✨ 生成文本</button>
       <button class="btn secondary" onclick="clearAll()">🧹 清空内容</button>
       <button class="btn" onclick="copyOutput()">📋 复制结果</button>
     </div>
@@ -1374,6 +1389,109 @@ window.addEventListener('DOMContentLoaded', ()=>{
     if(localStorage.getItem('nekoMode') === '1'){ toggleNeko(true); }
   }catch(e){}
 });
+</script>
+<script>
+/* NameNeko · 生成器默认称呼持久化（按你的实际 ID） */
+(function () {
+  const KEY = 'nn_gen_defaults_v1';
+
+  // 右侧“替换为”的四个输入（你的 ID）
+  const IDS = {
+    meName:   'newName',     // 你的名字
+    meNick:   'newNick',     // 你的昵称
+    boyName:  'boyNew',      // 男主名字
+    boyNick:  'boyNewnick'   // 男主昵称（你是这个 id）
+  };
+
+  // —— 保存当前右侧输入为默认值
+  window.saveGeneratorDefaults = function () {
+    const pick = id => (document.getElementById(id)?.value || '').trim();
+    const data = {
+      meName:  pick(IDS.meName),
+      meNick:  pick(IDS.meNick),
+      boyName: pick(IDS.boyName),
+      boyNick: pick(IDS.boyNick)
+    };
+    try {
+      localStorage.setItem(KEY, JSON.stringify(data));
+      alert('已将当前称呼设为默认，下次会自动填入（右侧四个框）。');
+    } catch (e) {
+      alert('保存失败：浏览器不允许本地存储。');
+    }
+  };
+
+  // —— 应用默认值（只在输入框为空时填入，避免覆盖你刚输入的内容）
+  function applyGeneratorDefaults () {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (!raw) return;
+      const d = JSON.parse(raw);
+      const setIfEmpty = (id, v) => {
+        const el = document.getElementById(id);
+        if (!el || !v) return;
+        if (!el.value) el.value = v;
+      };
+      setIfEmpty(IDS.meName,  d.meName);
+      setIfEmpty(IDS.meNick,  d.meNick);
+      setIfEmpty(IDS.boyName, d.boyName);
+      setIfEmpty(IDS.boyNick, d.boyNick);
+    } catch (e) {}
+  }
+
+  // —— 可选：清空默认
+  window.clearGeneratorDefaults = function () {
+    localStorage.removeItem(KEY);
+    alert('已清空默认称呼。');
+  };
+
+  // 首次打开就应用；返回生成器时会保留现状，不强制覆盖
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', applyGeneratorDefaults);
+  } else {
+    applyGeneratorDefaults();
+  }
+  window.addEventListener('pageshow', applyGeneratorDefaults);
+})();
+</script>
+<script>
+function clearGeneratorDefaults(opts={}){
+  const {
+    alsoClearInputs = true,   // 是否把右侧四个输入框一并清空
+    resetPresets   = false,   // 是否把左侧占位符复位为 yn/小n/hename/henick
+    clearTexts     = false    // 是否把文章输入/输出区一并清空
+  } = opts;
+
+  // 1) 清掉本地默认
+  localStorage.removeItem('nn_generator_defaults');
+
+  // 2) 清空右侧输入框
+  if (alsoClearInputs){
+    ['newName','newNick','boyNew','boyNewnick'].forEach(id=>{
+      const el = document.getElementById(id);
+      if(el){ el.value=''; el.dispatchEvent(new Event('input')); }
+    });
+  }
+
+  // 3) 可选：复位左侧预设占位符
+  if (resetPresets){
+    const presets = { mainName:'yn', mainNick:'小n', boyName:'hename', boyNick:'henick' };
+    Object.entries(presets).forEach(([id,val])=>{
+      const el = document.getElementById(id);
+      if(el){ el.value = val; }
+    });
+  }
+
+  // 4) 可选：清空文章输入/输出
+  if (clearTexts){
+    ['inputText','outputText'].forEach(id=>{
+      const el = document.getElementById(id);
+      if(el){ el.value=''; }
+    });
+  }
+
+  alert('默认称呼已清空' + (alsoClearInputs?'（输入框已清空）':'')
+        + (resetPresets?'（预设已复位）':'') + (clearTexts?'（文本已清空）':'') + '。');
+}
 </script>
 </body>
 </html>
